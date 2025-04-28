@@ -12,166 +12,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
 
-<script>
-    // Detekcia, či beží ako lokálny súbor alebo na serveri
-    const isLocalFileProtocol = window.location.protocol === 'file:';
-    let firebaseEnabled = false;
-
-    // Globálne premenné pre Firebase služby
-    let auth;
-    let db;
-    let currentUser = null; // Presuňte túto premennú sem, aby bola globálna
-
-    // Firebase inicializácia - len ak nebeží ako lokálny súbor
-    if (!isLocalFileProtocol) {
-        const firebaseConfig = {
-            apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
-            authDomain: "todo-97eb7.firebaseapp.com",
-            projectId: "todo-97eb7",
-            storageBucket: "todo-97eb7.firebasestorage.app",
-            messagingSenderId: "532736396477",
-            appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
-        };
-
-        try {
-            // Inicializácia Firebase
-            firebase.initializeApp(firebaseConfig);
-
-            // Referencie na služby Firebase
-            auth = firebase.auth();
-            db = firebase.firestore();
-
-            // Označiť, že Firebase je povolený
-            firebaseEnabled = true;
-
-            // Odstráňte túto duplicitnú deklaráciu
-            // let currentUser = null;
-        } catch (error) {
-            console.error("Nie je možné inicializovať Firebase:", error);
-            firebaseEnabled = false;
-        }
-    }
-
-    window.addEventListener('DOMContentLoaded', function () {
-        // Global variable for text length limit
-        const TEXT_LIMIT = 15;
-
-        // Kontrola, či sme v lokálnom súbore
-        if (isLocalFileProtocol) {
-            // Zobraz upozornenie namiesto prihlasovacieho tlačidla
-            document.getElementById('login-section').innerHTML = `
-                <div class="alert alert-warning">
-                    <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
-                    <p>Spúšťate túto aplikáciu z lokálneho súboru, čo Firebase nepodporuje.</p>
-                    <p>Pre aktiváciu Google prihlásenia potrebujete spustiť aplikáciu z webového servera (HTTP/HTTPS).</p>
-                    <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
-                </div>
-            `;
-            // Zobraziť priamo obsah aplikácie
-            document.getElementById('todo-content').style.display = 'block';
-            // Načítať úlohy z localStorage
-            loadTodos();
-        } else if (firebaseEnabled) {
-            // Poslúchanie zmien stavu autentifikácie
-            auth.onAuthStateChanged(function (user) {
-                if (user) {
-                    // Používateľ je prihlásený
-                    currentUser = user;
-                    document.getElementById('user-display-name').textContent = user.displayName || user.email;
-                    document.getElementById('user-photo').src = user.photoURL || 'https://via.placeholder.com/32';
-
-                    document.getElementById('login-section').style.display = 'none';
-                    document.getElementById('user-section').style.display = 'flex';
-                    document.getElementById('todo-content').style.display = 'block';
-
-                    // Načítanie úloh používateľa z Firebase
-                    loadTodosFromFirebase();
-                } else {
-                    // Používateľ je odhlásený
-                    currentUser = null;
-                    document.getElementById('login-section').style.display = 'flex';
-                    document.getElementById('user-section').style.display = 'none';
-                    document.getElementById('todo-content').style.display = 'none';
-
-                    // Vyčistenie lokálneho zoznamu
-                    document.getElementById('todo-list').innerHTML = '';
-                }
-            });
-        } else {
-            // Firebase nie je dostupný z iných dôvodov
-            document.getElementById('login-section').innerHTML = `
-                <div class="alert alert-warning">
-                    <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
-                    <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
-                </div>
-            `;
-            // Zobraziť priamo obsah aplikácie
-            document.getElementById('todo-content').style.display = 'block';
-            // Načítať úlohy z localStorage
-            loadTodos();
-        }
-
-        // Override the duplicate function to ensure the edit button is included
-        function correctAddTodoToDOM(task, id = null) {
-            const li = document.createElement('li');
-            li.draggable = true;
-            if (id) li.setAttribute('data-id', id);
-
-            // Limit task text using the global TEXT_LIMIT
-            const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
-
-            li.innerHTML = `
-                <div class="drag-handle">☰</div>
-                <span data-full-text="${task}">${displayTask}</span>
-                <div class="button-group">
-                    <button class="edit-btn">Edit</button>
-                    <button class="delete-btn">Delete</button>
-                </div>`;
-            document.getElementById('todo-list').appendChild(li);
-
-            // Add drag event listeners
-            li.addEventListener('dragstart', handleDragStart);
-            li.addEventListener('dragover', handleDragOver);
-            li.addEventListener('drop', handleDrop);
-            li.addEventListener('dragend', handleDragEnd);
-
-            li.querySelector('.edit-btn').addEventListener('click', function () {
-                const spanEl = li.querySelector('span');
-                const currentTask = spanEl.getAttribute('data-full-text');
-                const newTask = prompt('Edit task', currentTask);
-                if (newTask && newTask.trim()) {
-                    const newDisplayTask = newTask.trim().length > TEXT_LIMIT ?
-                        newTask.trim().substring(0, TEXT_LIMIT) + '...' :
-                        newTask.trim();
-                    spanEl.textContent = newDisplayTask;
-                    spanEl.setAttribute('data-full-text', newTask.trim());
-
-                    // Aktualizácia úlohy vo Firebase
-                    if (currentUser && li.hasAttribute('data-id')) {
-                        const taskId = li.getAttribute('data-id');
-                        updateTaskInFirebase(taskId, newTask.trim());
-                    } else {
-                        saveTodos();
-                    }
-                }
-            });
-
-            li.querySelector('.delete-btn').addEventListener('click', function () {
-                // Vymazanie úlohy z Firebase
-                if (currentUser && li.hasAttribute('data-id')) {
-                    const taskId = li.getAttribute('data-id');
-                    deleteTaskFromFirebase(taskId);
-                }
-
-                li.remove();
-                saveTodos();
-            });
-        }
-
-        window.addTodoToDOM = correctAddTodoToDOM;
-    });
-</script>
-
 <body>
 
     <div id="todo-app">
@@ -204,17 +44,60 @@
     </div>
 
     <script>
+        // Detekcia, či beží ako lokálny súbor alebo na serveri
+        const isLocalFileProtocol = window.location.protocol === 'file:';
+        let firebaseEnabled = false;
+
         // Global variable for text length limit
         const TEXT_LIMIT = 15;
 
+        // Globálne premenné pre Firebase služby
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+
+        // DOM elementy
         const todoListEl = document.getElementById('todo-list');
         const todoInput = document.getElementById('todo-input');
         const addTodoBtn = document.getElementById('add-todo');
         const loginBtn = document.getElementById('login-button');
         const logoutBtn = document.getElementById('logout-button');
 
+        // Firebase inicializácia - len ak nebeží ako lokálny súbor
+        if (!isLocalFileProtocol) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
+                authDomain: "todo-97eb7.firebaseapp.com",
+                projectId: "todo-97eb7",
+                storageBucket: "todo-97eb7.firebasestorage.app",
+                messagingSenderId: "532736396477",
+                appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
+            };
+
+            try {
+                // Inicializácia Firebase
+                firebase.initializeApp(firebaseConfig);
+
+                // Referencie na služby Firebase
+                auth = firebase.auth();
+                db = firebase.firestore();
+
+                // Označiť, že Firebase je povolený
+                firebaseEnabled = true;
+                console.log("Firebase inicializovaný úspešne");
+            } catch (error) {
+                console.error("Nie je možné inicializovať Firebase:", error);
+                firebaseEnabled = false;
+            }
+        }
+
         // Login s Google
         loginBtn.addEventListener('click', function () {
+            if (!firebaseEnabled || !auth) {
+                alert("Firebase nie je momentálne dostupný");
+                return;
+            }
+
             const provider = new firebase.auth.GoogleAuthProvider();
             auth.signInWithPopup(provider)
                 .catch((error) => {
@@ -225,74 +108,14 @@
 
         // Odhlásenie
         logoutBtn.addEventListener('click', function () {
-            auth.signOut().catch((error) => {
-                console.error('Chyba pri odhlásení:', error);
-            });
+            if (auth) {
+                auth.signOut().catch((error) => {
+                    console.error('Chyba pri odhlásení:', error);
+                });
+            }
         });
 
-        // Firebase funkcie pre úlohy
-        function loadTodosFromFirebase() {
-            if (!currentUser) return;
-
-            // Vyčistenie zoznamu
-            todoListEl.innerHTML = '';
-
-            // Načítanie úloh z Firestore
-            db.collection('users').doc(currentUser.uid).collection('todos')
-                .orderBy('position', 'asc') // Najprv zoraď podľa pozície
-                .orderBy('createdAt', 'asc') // Potom podľa dátumu vytvorenia
-                .get()
-                .then((querySnapshot) => {
-                    querySnapshot.forEach((doc) => {
-                        addTodoToDOM(doc.data().text, doc.id);
-                    });
-                })
-                .catch((error) => {
-                    console.error('Chyba pri načítaní úloh:', error);
-                });
-        }
-
-        function addTaskToFirebase(taskText) {
-            if (!currentUser) return null;
-
-            // Získať počet existujúcich úloh pre určenie pozície
-            return db.collection('users').doc(currentUser.uid).collection('todos')
-                .get()
-                .then((snapshot) => {
-                    const position = snapshot.size; // Nová úloha bude posledná
-                    return db.collection('users').doc(currentUser.uid).collection('todos').add({
-                        text: taskText,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        completed: false,
-                        position: position // Pridaj pozíciu pre správne zoradenie
-                    });
-                });
-        }
-
-        function updateTaskInFirebase(taskId, newText) {
-            if (!currentUser) return;
-
-            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
-                .update({
-                    text: newText,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                })
-                .catch((error) => {
-                    console.error('Chyba pri aktualizácii úlohy:', error);
-                });
-        }
-
-        function deleteTaskFromFirebase(taskId) {
-            if (!currentUser) return;
-
-            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
-                .delete()
-                .catch((error) => {
-                    console.error('Chyba pri vymazaní úlohy:', error);
-                });
-        }
-
-        // Add a new task to the DOM
+        // Add a new task to the DOM - LEN JEDNA IMPLEMENTÁCIA
         function addTodoToDOM(task, id = null) {
             const li = document.createElement('li');
             li.draggable = true;
@@ -352,6 +175,95 @@
             });
         }
 
+        // Firebase funkcie pre úlohy
+        function loadTodosFromFirebase() {
+            if (!currentUser || !db) {
+                console.log("Nemožno načítať úlohy: používateľ nie je prihlásený alebo db nie je inicializovaná");
+                return;
+            }
+
+            console.log("Načítavam úlohy z Firebase pre používateľa:", currentUser.uid);
+
+            // Vyčistenie zoznamu
+            todoListEl.innerHTML = '';
+
+            // Načítanie úloh z Firestore
+            db.collection('users').doc(currentUser.uid).collection('todos')
+                .orderBy('position', 'asc') // Najprv zoraď podľa pozície
+                .get()
+                .then((querySnapshot) => {
+                    console.log("Načítaných úloh:", querySnapshot.size);
+                    querySnapshot.forEach((doc) => {
+                        console.log("Úloha:", doc.id, doc.data());
+                        addTodoToDOM(doc.data().text, doc.id);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Chyba pri načítaní úloh:', error);
+                });
+        }
+
+        function addTaskToFirebase(taskText) {
+            if (!currentUser || !db) {
+                console.log("Nemožno pridať úlohu: používateľ nie je prihlásený alebo db nie je inicializovaná");
+                return Promise.resolve(null);
+            }
+
+            console.log("Pridávam úlohu do Firebase:", taskText);
+
+            // Získať počet existujúcich úloh pre určenie pozície
+            return db.collection('users').doc(currentUser.uid).collection('todos')
+                .get()
+                .then((snapshot) => {
+                    const position = snapshot.size; // Nová úloha bude posledná
+                    console.log("Pozícia novej úlohy:", position);
+
+                    return db.collection('users').doc(currentUser.uid).collection('todos').add({
+                        text: taskText,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        completed: false,
+                        position: position // Pridaj pozíciu pre správne zoradenie
+                    });
+                })
+                .then(docRef => {
+                    console.log("Úloha pridaná s ID:", docRef.id);
+                    return docRef;
+                })
+                .catch(error => {
+                    console.error("Chyba pri pridávaní úlohy:", error);
+                    throw error;
+                });
+        }
+
+        function updateTaskInFirebase(taskId, newText) {
+            if (!currentUser || !db) return;
+
+            console.log("Aktualizujem úlohu vo Firebase:", taskId, newText);
+
+            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
+                .update({
+                    text: newText,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+                .then(() => console.log("Úloha aktualizovaná"))
+                .catch((error) => {
+                    console.error('Chyba pri aktualizácii úlohy:', error);
+                });
+        }
+
+        function deleteTaskFromFirebase(taskId) {
+            if (!currentUser || !db) return;
+
+            console.log("Mažem úlohu z Firebase:", taskId);
+
+            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
+                .delete()
+                .then(() => console.log("Úloha vymazaná"))
+                .catch((error) => {
+                    console.error('Chyba pri vymazaní úlohy:', error);
+                });
+        }
+
         // Drag and drop functionality
         let draggedItem = null;
 
@@ -389,19 +301,34 @@
                     target.parentNode.insertBefore(draggedItem, target);
                 }
                 clearDragStyles();
-                
+
                 // Aktualizácia poradia v localStorage alebo Firebase
                 if (currentUser) {
-                    updateFirebasePositions(); // Pridaná funkcia na aktualizáciu pozícií vo Firebase
+                    updateFirebasePositions();
                 } else {
                     saveTodos();
                 }
             }
         }
 
-        // Nová funkcia na aktualizáciu pozícií vo Firebase po preusporiadaní
+        function handleDragEnd() {
+            clearDragStyles();
+            draggedItem = null;
+        }
+
+        function clearDragStyles() {
+            document.querySelectorAll('#todo-list li').forEach(item => {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+                item.classList.remove('dragging');
+            });
+        }
+
+        // Funkcia na aktualizáciu pozícií vo Firebase po preusporiadaní
         function updateFirebasePositions() {
-            if (!currentUser) return;
+            if (!currentUser || !db) return;
+
+            console.log("Aktualizujem pozície vo Firebase");
 
             // Získaj všetky úlohy v aktuálnom poradí
             const tasks = [];
@@ -414,18 +341,22 @@
                 }
             });
 
+            console.log("Úlohy na aktualizáciu:", tasks);
+
             // Vytvor batch pre hromadné úpravy
             const batch = db.batch();
             tasks.forEach(task => {
                 const docRef = db.collection('users').doc(currentUser.uid)
-                               .collection('todos').doc(task.id);
+                    .collection('todos').doc(task.id);
                 batch.update(docRef, { position: task.position });
             });
 
             // Vykonaj batch úpravy
-            batch.commit().catch(error => {
-                console.error('Chyba pri aktualizácii poradia:', error);
-            });
+            batch.commit()
+                .then(() => console.log("Pozície aktualizované"))
+                .catch(error => {
+                    console.error('Chyba pri aktualizácii poradia:', error);
+                });
         }
 
         // Load tasks from localStorage on startup
@@ -455,17 +386,20 @@
             localStorage.setItem('todos', JSON.stringify(todosArray));
         }
 
+        // Spracovanie kliknutia na tlačidlo Add
         addTodoBtn.addEventListener('click', function () {
             const task = todoInput.value.trim();
             if (task) {
-                if (currentUser) {
+                if (currentUser && firebaseEnabled && db) {
                     // Pridanie do Firebase
                     addTaskToFirebase(task)
                         .then((docRef) => {
                             if (docRef && docRef.id) {
                                 addTodoToDOM(task, docRef.id);
+                                console.log("Úloha pridaná s ID:", docRef.id);
                             } else {
                                 addTodoToDOM(task);
+                                console.log("Úloha pridaná bez ID (lokálne)");
                             }
                             todoInput.value = '';
                         })
@@ -485,8 +419,73 @@
             }
         });
 
-        // Load the todos when the page loads - prispôsobené na kontrolu prihlásenia
-        setTimeout(loadTodos, 500);
+        // Inicializácia aplikácie
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log("Aplikácia sa inicializuje");
+
+            // Kontrola, či sme v lokálnom súbore
+            if (isLocalFileProtocol) {
+                console.log("Aplikácia beží lokálne, Firebase nedostupný");
+
+                // Zobraz upozornenie namiesto prihlasovacieho tlačidla
+                document.getElementById('login-section').innerHTML = `
+                    <div class="alert alert-warning">
+                        <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
+                        <p>Spúšťate túto aplikáciu z lokálneho súboru, čo Firebase nepodporuje.</p>
+                        <p>Pre aktiváciu Google prihlásenia potrebujete spustiť aplikáciu z webového servera (HTTP/HTTPS).</p>
+                        <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
+                    </div>
+                `;
+                // Zobraziť priamo obsah aplikácie
+                document.getElementById('todo-content').style.display = 'block';
+                // Načítať úlohy z localStorage
+                loadTodos();
+            } else if (firebaseEnabled && auth) {
+                console.log("Firebase je dostupný, čaká sa na stav autentifikácie");
+
+                // Poslúchanie zmien stavu autentifikácie
+                auth.onAuthStateChanged(function (user) {
+                    if (user) {
+                        // Používateľ je prihlásený
+                        console.log("Používateľ je prihlásený:", user.uid);
+                        currentUser = user;
+                        document.getElementById('user-display-name').textContent = user.displayName || user.email;
+                        document.getElementById('user-photo').src = user.photoURL || 'https://via.placeholder.com/32';
+
+                        document.getElementById('login-section').style.display = 'none';
+                        document.getElementById('user-section').style.display = 'flex';
+                        document.getElementById('todo-content').style.display = 'block';
+
+                        // Načítanie úloh používateľa z Firebase
+                        loadTodosFromFirebase();
+                    } else {
+                        // Používateľ je odhlásený
+                        console.log("Používateľ nie je prihlásený");
+                        currentUser = null;
+                        document.getElementById('login-section').style.display = 'flex';
+                        document.getElementById('user-section').style.display = 'none';
+                        document.getElementById('todo-content').style.display = 'none';
+
+                        // Vyčistenie lokálneho zoznamu
+                        document.getElementById('todo-list').innerHTML = '';
+                    }
+                });
+            } else {
+                console.log("Firebase nie je dostupný z iných dôvodov");
+
+                // Firebase nie je dostupný z iných dôvodov
+                document.getElementById('login-section').innerHTML = `
+                    <div class="alert alert-warning">
+                        <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
+                        <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
+                    </div>
+                `;
+                // Zobraziť priamo obsah aplikácie
+                document.getElementById('todo-content').style.display = 'block';
+                // Načítať úlohy z localStorage
+                loadTodos();
+            }
+        });
     </script>
     <style>
         body {
@@ -639,6 +638,15 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
+        }
+
+        .alert {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            text-align: left;
         }
     </style>
 </body>
