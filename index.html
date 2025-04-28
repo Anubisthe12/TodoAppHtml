@@ -30,8 +30,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-  <!-- Firebase Hosting auto-init (hides config) -->
-  <script src="/init.js"></script>
 </head>
 <body>
   <div id="auth-controls">
@@ -46,7 +44,19 @@
   </div>
 
   <script>
-    // Firebase is auto-initialized by /__/firebase/init.js
+    // Firebase configuration (inline)
+    const firebaseConfig = {
+      apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
+      authDomain: "todo-97eb7.firebaseapp.com",
+      projectId: "todo-97eb7",
+      storageBucket: "todo-97eb7.appspot.com",
+      messagingSenderId: "532736396477",
+      appId: "1:532736396477:web:c0444e0d91e744c356bb4"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+
+    // Firebase services
     const auth = firebase.auth();
     const provider = new firebase.auth.GoogleAuthProvider();
     const db = firebase.firestore();
@@ -93,7 +103,7 @@
     // DOM todo
     function addTodoToDOM(task) {
       const li = document.createElement('li'); li.draggable = true;
-      const display = (task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task);
+      const display = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
       li.innerHTML = `
         <div class="drag-handle">☰</div>
         <span data-full-text="${task}">${display}</span>
@@ -113,7 +123,7 @@
         const newT = prompt('Edit task', curr);
         if (newT && newT.trim()) {
           const t = newT.trim();
-          span.textContent = (t.length > TEXT_LIMIT ? t.substring(0, TEXT_LIMIT)+'...' : t);
+          span.textContent = t.length > TEXT_LIMIT ? t.substring(0, TEXT_LIMIT) + '...' : t;
           span.setAttribute('data-full-text', t);
           await saveTodos();
         }
