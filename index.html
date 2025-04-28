@@ -1,210 +1,101 @@
 <!DOCTYPE html>
 <html lang="sk">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jednoduchá TODO aplikácia</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        h1 {
-            text-align: center;
-        }
-
-        #auth-buttons {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-
-        #auth-buttons button {
-            margin: 0 0.5rem;
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-        }
-
-        #app-ui {
-            display: none;
-        }
-
-        form {
-            display: flex;
-            margin-bottom: 1rem;
-        }
-
-        input {
-            flex: 1;
-            padding: 0.5rem;
-            font-size: 1rem;
-        }
-
-        button {
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-        }
-
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            margin-bottom: 0.5rem;
-            border-radius: 4px;
-        }
-
-        .done {
-            text-decoration: line-through;
-            color: #888;
-        }
-
-        .delete-btn {
-            background: none;
-            border: none;
-            color: red;
-            font-weight: bold;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jednoduchá TODO aplikácia</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { text-align: center; }
+    form { display: flex; margin-bottom: 1rem; }
+    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; }
+    ul { list-style: none; padding: 0; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border: 1px solid #ddd; margin-bottom: 0.5rem; border-radius: 4px; }
+    .done { text-decoration: line-through; color: #888; }
+    .delete-btn { background: none; border: none; color: red; font-weight: bold; cursor: pointer; }
+  </style>
 </head>
-
 <body>
-    <h1>Moje úlohy</h1>
-    <div id="auth-buttons">
-        <button id="sign-in-btn">Prihlásiť cez Google</button>
-        <button id="sign-out-btn" style="display:none;">Odhlásiť</button>
-    </div>
-    <div id="app-ui">
-        <form id="todo-form">
-            <input id="todo-input" type="text" placeholder="Nová úloha" required />
-            <button type="submit">Pridať</button>
-        </form>
-        <ul id="todo-list"></ul>
-    </div>
+  <h1>Moje úlohy</h1>
+  <form id="todo-form">
+    <input id="todo-input" type="text" placeholder="Nová úloha" required />
+    <button type="submit">Pridať</button>
+  </form>
+  <ul id="todo-list"></ul>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-        import {
-            getFirestore,
-            collection,
-            addDoc,
-            onSnapshot,
-            deleteDoc,
-            doc,
-            updateDoc,
-            query,
-            where
-        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
-        import {
-            getAuth,
-            GoogleAuthProvider,
-            signInWithPopup,
-            onAuthStateChanged,
-            signOut
-        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+  <!-- Firebase SDK -->
+  <script type="module">
+    // Importy z Firebase v9+ (modulárna verzia)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      onSnapshot,
+      deleteDoc,
+      doc,
+      updateDoc
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-        // Konfigurácia Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
-            authDomain: "todo-97eb7.firebaseapp.com",
-            projectId: "todo-97eb7",
-            storageBucket: "todo-97eb7.appspot.com",
-            messagingSenderId: "532736396477",
-            appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
-        };
+    // Konfigurácia Firebase (váš projekt)
+    const firebaseConfig = {
+      apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
+      authDomain: "todo-97eb7.firebaseapp.com",
+      projectId: "todo-97eb7",
+      storageBucket: "todo-97eb7.firebasestorage.app",
+      messagingSenderId: "532736396477",
+      appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
+    };
 
-        // Inicializácia Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+    // Inicializácia Firebase a Firestore
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const todosCol = collection(db, 'todos');
 
-        // DOM prvky
-        const signInBtn = document.getElementById('sign-in-btn');
-        const signOutBtn = document.getElementById('sign-out-btn');
-        const appUi = document.getElementById('app-ui');
-        const form = document.getElementById('todo-form');
-        const input = document.getElementById('todo-input');
-        const list = document.getElementById('todo-list');
+    // Referencie na DOM prvky
+    const form = document.getElementById('todo-form');
+    const input = document.getElementById('todo-input');
+    const list = document.getElementById('todo-list');
 
-        // Prihlásenie
-        signInBtn.addEventListener('click', () => {
-            signInWithPopup(auth, provider)
-                .catch(err => console.error('Prihlasovací error:', err));
+    // Pridanie novej úlohy
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      await addDoc(todosCol, { text, done: false, created: Date.now() });
+      input.value = '';
+    });
+
+    // Dynamické načítanie úloh a aktualizácia UI
+    onSnapshot(todosCol, (snapshot) => {
+      list.innerHTML = '';
+      snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const li = document.createElement('li');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = data.done;
+        const span = document.createElement('span');
+        span.textContent = data.text;
+        if (data.done) span.classList.add('done');
+
+        // Prekreslenie stavu po kliknutí
+        checkbox.addEventListener('change', async () => {
+          await updateDoc(doc(db, 'todos', docSnap.id), { done: checkbox.checked });
         });
 
-        // Odhlásenie
-        signOutBtn.addEventListener('click', () => {
-            signOut(auth);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '✕';
+        deleteBtn.classList.add('delete-btn');
+        deleteBtn.addEventListener('click', async () => {
+          await deleteDoc(doc(db, 'todos', docSnap.id));
         });
 
-        // Reagovať na zmenu stavu prihlásenia
-        onAuthStateChanged(auth, user => {
-            if (user) {
-                // Zobraziť UI aplikácie
-                signInBtn.style.display = 'none';
-                signOutBtn.style.display = 'inline-block';
-                appUi.style.display = 'block';
-                // Načítať úlohy používateľa
-                const todosCol = collection(db, 'todos');
-                const userTodosQuery = query(todosCol, where('uid', '==', user.uid));
-
-                onSnapshot(userTodosQuery, snapshot => {
-                    list.innerHTML = '';
-                    snapshot.docs.forEach(docSnap => {
-                        const data = docSnap.data();
-                        const li = document.createElement('li');
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.checked = data.done;
-                        const span = document.createElement('span');
-                        span.textContent = data.text;
-                        if (data.done) span.classList.add('done');
-
-                        checkbox.addEventListener('change', async () => {
-                            await updateDoc(doc(db, 'todos', docSnap.id), { done: checkbox.checked });
-                        });
-
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.textContent = '✕';
-                        deleteBtn.classList.add('delete-btn');
-                        deleteBtn.addEventListener('click', async () => {
-                            await deleteDoc(doc(db, 'todos', docSnap.id));
-                        });
-
-                        li.append(checkbox, span, deleteBtn);
-                        list.appendChild(li);
-                    });
-                });
-
-                // Pridanie novej úlohy
-                form.onsubmit = async e => {
-                    e.preventDefault();
-                    const text = input.value.trim();
-                    if (!text) return;
-                    await addDoc(todosCol, { text, done: false, uid: user.uid, created: Date.now() });
-                    input.value = '';
-                };
-
-            } else {
-                // Skryť UI aplikácie
-                signInBtn.style.display = 'inline-block';
-                signOutBtn.style.display = 'none';
-                appUi.style.display = 'none';
-            }
-        });
-    </script>
+        li.append(checkbox, span, deleteBtn);
+        list.appendChild(li);
+      });
+    });
+  </script>
 </body>
-
 </html>
