@@ -4,18 +4,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
+    <title>Todo App s Google Prihlásením</title>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
 
 <script>
+    // Detekcia, či beží ako lokálny súbor alebo na serveri
+    const isLocalFileProtocol = window.location.protocol === 'file:';
+    let firebaseEnabled = false;
+
+    // Firebase inicializácia - len ak nebeží ako lokálny súbor
+    if (!isLocalFileProtocol) {
+        const firebaseConfig = {
+            apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
+            authDomain: "todo-97eb7.firebaseapp.com",
+            projectId: "todo-97eb7",
+            storageBucket: "todo-97eb7.firebasestorage.app",
+            messagingSenderId: "532736396477",
+            appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
+        };
+
+        try {
+            // Inicializácia Firebase
+            firebase.initializeApp(firebaseConfig);
+
+            // Referencie na služby Firebase
+            const auth = firebase.auth();
+            const db = firebase.firestore();
+
+            // Označiť, že Firebase je povolený
+            firebaseEnabled = true;
+
+            // Globálny používateľský objekt
+            let currentUser = null;
+        } catch (error) {
+            console.error("Nie je možné inicializovať Firebase:", error);
+            firebaseEnabled = false;
+        }
+    }
+
     window.addEventListener('DOMContentLoaded', function () {
         // Global variable for text length limit
         const TEXT_LIMIT = 15;
 
+        // Kontrola, či sme v lokálnom súbore
+        if (isLocalFileProtocol) {
+            // Zobraz upozornenie namiesto prihlasovacieho tlačidla
+            document.getElementById('login-section').innerHTML = `
+                <div class="alert alert-warning">
+                    <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
+                    <p>Spúšťate túto aplikáciu z lokálneho súboru, čo Firebase nepodporuje.</p>
+                    <p>Pre aktiváciu Google prihlásenia potrebujete spustiť aplikáciu z webového servera (HTTP/HTTPS).</p>
+                    <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
+                </div>
+            `;
+            // Zobraziť priamo obsah aplikácie
+            document.getElementById('todo-content').style.display = 'block';
+            // Načítať úlohy z localStorage
+            loadTodos();
+        } else if (firebaseEnabled) {
+            // Poslúchanie zmien stavu autentifikácie
+            auth.onAuthStateChanged(function (user) {
+                if (user) {
+                    // Používateľ je prihlásený
+                    currentUser = user;
+                    document.getElementById('user-display-name').textContent = user.displayName || user.email;
+                    document.getElementById('user-photo').src = user.photoURL || 'https://via.placeholder.com/32';
+
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('user-section').style.display = 'flex';
+                    document.getElementById('todo-content').style.display = 'block';
+
+                    // Načítanie úloh používateľa z Firebase
+                    loadTodosFromFirebase();
+                } else {
+                    // Používateľ je odhlásený
+                    currentUser = null;
+                    document.getElementById('login-section').style.display = 'flex';
+                    document.getElementById('user-section').style.display = 'none';
+                    document.getElementById('todo-content').style.display = 'none';
+
+                    // Vyčistenie lokálneho zoznamu
+                    document.getElementById('todo-list').innerHTML = '';
+                }
+            });
+        } else {
+            // Firebase nie je dostupný z iných dôvodov
+            document.getElementById('login-section').innerHTML = `
+                <div class="alert alert-warning">
+                    <p><strong>Firebase prihlásenie nie je dostupné</strong></p>
+                    <p>Momentálne pracujete v režime bez prihlásenia, všetky údaje sa ukladajú lokálne.</p>
+                </div>
+            `;
+            // Zobraziť priamo obsah aplikácie
+            document.getElementById('todo-content').style.display = 'block';
+            // Načítať úlohy z localStorage
+            loadTodos();
+        }
+
         // Override the duplicate function to ensure the edit button is included
-        function correctAddTodoToDOM(task) {
+        function correctAddTodoToDOM(task, id = null) {
             const li = document.createElement('li');
             li.draggable = true;
+            if (id) li.setAttribute('data-id', id);
 
             // Limit task text using the global TEXT_LIMIT
             const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
@@ -45,14 +140,29 @@
                         newTask.trim();
                     spanEl.textContent = newDisplayTask;
                     spanEl.setAttribute('data-full-text', newTask.trim());
-                    saveTodos();
+
+                    // Aktualizácia úlohy vo Firebase
+                    if (currentUser && li.hasAttribute('data-id')) {
+                        const taskId = li.getAttribute('data-id');
+                        updateTaskInFirebase(taskId, newTask.trim());
+                    } else {
+                        saveTodos();
+                    }
                 }
             });
+
             li.querySelector('.delete-btn').addEventListener('click', function () {
+                // Vymazanie úlohy z Firebase
+                if (currentUser && li.hasAttribute('data-id')) {
+                    const taskId = li.getAttribute('data-id');
+                    deleteTaskFromFirebase(taskId);
+                }
+
                 li.remove();
                 saveTodos();
             });
         }
+
         window.addTodoToDOM = correctAddTodoToDOM;
     });
 </script>
@@ -61,10 +171,33 @@
 
     <div id="todo-app">
         <h1>Todo App</h1>
-        <input type="text" id="todo-input" placeholder="Enter a task">
-        <button id="add-todo">Add</button>
-        <ul id="todo-list"></ul>
+
+        <!-- Sekcia pre prihlásenie -->
+        <div id="login-section" class="auth-section">
+            <p>Prihláste sa pomocou svojho Google účtu:</p>
+            <button id="login-button" class="google-btn">
+                <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google logo">
+                Prihlásiť sa s Google
+            </button>
+        </div>
+
+        <!-- Sekcia pre prihláseného používateľa -->
+        <div id="user-section" class="auth-section" style="display:none;">
+            <div class="user-info">
+                <img id="user-photo" src="https://via.placeholder.com/32" alt="Profilová fotka">
+                <span id="user-display-name">Používateľ</span>
+            </div>
+            <button id="logout-button">Odhlásiť sa</button>
+        </div>
+
+        <!-- Obsah aplikácie - zobrazuje sa len po prihlásení -->
+        <div id="todo-content" style="display:none;">
+            <input type="text" id="todo-input" placeholder="Enter a task">
+            <button id="add-todo">Add</button>
+            <ul id="todo-list"></ul>
+        </div>
     </div>
+
     <script>
         // Global variable for text length limit
         const TEXT_LIMIT = 15;
@@ -72,11 +205,85 @@
         const todoListEl = document.getElementById('todo-list');
         const todoInput = document.getElementById('todo-input');
         const addTodoBtn = document.getElementById('add-todo');
+        const loginBtn = document.getElementById('login-button');
+        const logoutBtn = document.getElementById('logout-button');
+
+        // Login s Google
+        loginBtn.addEventListener('click', function () {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .catch((error) => {
+                    console.error('Chyba pri prihlásení:', error);
+                    alert('Prihlásenie zlyhalo: ' + error.message);
+                });
+        });
+
+        // Odhlásenie
+        logoutBtn.addEventListener('click', function () {
+            auth.signOut().catch((error) => {
+                console.error('Chyba pri odhlásení:', error);
+            });
+        });
+
+        // Firebase funkcie pre úlohy
+        function loadTodosFromFirebase() {
+            if (!currentUser) return;
+
+            // Vyčistenie zoznamu
+            todoListEl.innerHTML = '';
+
+            // Načítanie úloh z Firestore
+            db.collection('users').doc(currentUser.uid).collection('todos')
+                .orderBy('createdAt')
+                .get()
+                .then((querySnapshot) => {
+                    querySnapshot.forEach((doc) => {
+                        addTodoToDOM(doc.data().text, doc.id);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Chyba pri načítaní úloh:', error);
+                });
+        }
+
+        function addTaskToFirebase(taskText) {
+            if (!currentUser) return null;
+
+            return db.collection('users').doc(currentUser.uid).collection('todos').add({
+                text: taskText,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                completed: false
+            });
+        }
+
+        function updateTaskInFirebase(taskId, newText) {
+            if (!currentUser) return;
+
+            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
+                .update({
+                    text: newText,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+                .catch((error) => {
+                    console.error('Chyba pri aktualizácii úlohy:', error);
+                });
+        }
+
+        function deleteTaskFromFirebase(taskId) {
+            if (!currentUser) return;
+
+            db.collection('users').doc(currentUser.uid).collection('todos').doc(taskId)
+                .delete()
+                .catch((error) => {
+                    console.error('Chyba pri vymazaní úlohy:', error);
+                });
+        }
 
         // Add a new task to the DOM
-        function addTodoToDOM(task) {
+        function addTodoToDOM(task, id = null) {
             const li = document.createElement('li');
             li.draggable = true;
+            if (id) li.setAttribute('data-id', id);
 
             // Limit task text using the global TEXT_LIMIT
             const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
@@ -108,12 +315,25 @@
                         newTask.trim();
                     spanEl.textContent = newDisplayTask;
                     spanEl.setAttribute('data-full-text', newTask.trim());
-                    saveTodos();
+
+                    // Aktualizácia úlohy vo Firebase
+                    if (currentUser && li.hasAttribute('data-id')) {
+                        const taskId = li.getAttribute('data-id');
+                        updateTaskInFirebase(taskId, newTask.trim());
+                    } else {
+                        saveTodos();
+                    }
                 }
             });
 
             // Delete button handler
             li.querySelector('.delete-btn').addEventListener('click', function () {
+                // Vymazanie úlohy z Firebase
+                if (currentUser && li.hasAttribute('data-id')) {
+                    const taskId = li.getAttribute('data-id');
+                    deleteTaskFromFirebase(taskId);
+                }
+
                 li.remove();
                 saveTodos();
             });
@@ -175,17 +395,24 @@
 
         // Load tasks from localStorage on startup
         function loadTodos() {
-            const todosStr = localStorage.getItem('todos');
-            if (todosStr) {
-                const todos = JSON.parse(todosStr);
-                todos.forEach(task => {
-                    addTodoToDOM(task);
-                });
+            // Firebase načítavanie sa deje v onAuthStateChanged handleri
+            // Toto je len záloha pre neprihlásených používateľov
+            if (!currentUser) {
+                const todosStr = localStorage.getItem('todos');
+                if (todosStr) {
+                    const todos = JSON.parse(todosStr);
+                    todos.forEach(task => {
+                        addTodoToDOM(task);
+                    });
+                }
             }
         }
 
         // Save the current list of tasks to localStorage
         function saveTodos() {
+            // Ak je používateľ prihlásený, nepoužívame localStorage
+            if (currentUser) return;
+
             const todosArray = [];
             todoListEl.querySelectorAll('li span').forEach(span => {
                 todosArray.push(span.getAttribute('data-full-text'));
@@ -196,14 +423,35 @@
         addTodoBtn.addEventListener('click', function () {
             const task = todoInput.value.trim();
             if (task) {
-                addTodoToDOM(task);
-                saveTodos();
-                todoInput.value = '';
+                if (currentUser) {
+                    // Pridanie do Firebase
+                    addTaskToFirebase(task)
+                        .then((docRef) => {
+                            if (docRef && docRef.id) {
+                                addTodoToDOM(task, docRef.id);
+                            } else {
+                                addTodoToDOM(task);
+                            }
+                            todoInput.value = '';
+                        })
+                        .catch((error) => {
+                            console.error('Chyba pri pridaní úlohy:', error);
+                            // Fallback na lokálne uloženie
+                            addTodoToDOM(task);
+                            saveTodos();
+                            todoInput.value = '';
+                        });
+                } else {
+                    // Používateľ nie je prihlásený - použitie localStorage
+                    addTodoToDOM(task);
+                    saveTodos();
+                    todoInput.value = '';
+                }
             }
         });
 
-        // Load the todos when the page loads
-        loadTodos();
+        // Load the todos when the page loads - prispôsobené na kontrolu prihlásenia
+        setTimeout(loadTodos, 500);
     </script>
     <style>
         body {
@@ -309,6 +557,53 @@
 
         .button-group {
             display: flex;
+        }
+
+        /* Štýly pre autentifikáciu */
+        .auth-section {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .google-btn {
+            display: flex;
+            align-items: center;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .google-btn img {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .user-info img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        #logout-button {
+            background-color: #f1f1f1;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
         }
     </style>
 </body>
