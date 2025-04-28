@@ -20,6 +20,7 @@
     // Globálne premenné pre Firebase služby
     let auth;
     let db;
+    let currentUser = null; // Presuňte túto premennú sem, aby bola globálna
 
     // Firebase inicializácia - len ak nebeží ako lokálny súbor
     if (!isLocalFileProtocol) {
@@ -43,8 +44,8 @@
             // Označiť, že Firebase je povolený
             firebaseEnabled = true;
 
-            // Globálny používateľský objekt
-            let currentUser = null;
+            // Odstráňte túto duplicitnú deklaráciu
+            // let currentUser = null;
         } catch (error) {
             console.error("Nie je možné inicializovať Firebase:", error);
             firebaseEnabled = false;
@@ -238,7 +239,8 @@
 
             // Načítanie úloh z Firestore
             db.collection('users').doc(currentUser.uid).collection('todos')
-                .orderBy('createdAt')
+                .orderBy('position', 'asc') // Najprv zoraď podľa pozície
+                .orderBy('createdAt', 'asc') // Potom podľa dátumu vytvorenia
                 .get()
                 .then((querySnapshot) => {
                     querySnapshot.forEach((doc) => {
@@ -253,11 +255,18 @@
         function addTaskToFirebase(taskText) {
             if (!currentUser) return null;
 
-            return db.collection('users').doc(currentUser.uid).collection('todos').add({
-                text: taskText,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                completed: false
-            });
+            // Získať počet existujúcich úloh pre určenie pozície
+            return db.collection('users').doc(currentUser.uid).collection('todos')
+                .get()
+                .then((snapshot) => {
+                    const position = snapshot.size; // Nová úloha bude posledná
+                    return db.collection('users').doc(currentUser.uid).collection('todos').add({
+                        text: taskText,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        completed: false,
+                        position: position // Pridaj pozíciu pre správne zoradenie
+                    });
+                });
         }
 
         function updateTaskInFirebase(taskId, newText) {
@@ -380,20 +389,42 @@
                     target.parentNode.insertBefore(draggedItem, target);
                 }
                 clearDragStyles();
-                saveTodos();
+                
+                // Aktualizácia poradia v localStorage alebo Firebase
+                if (currentUser) {
+                    updateFirebasePositions(); // Pridaná funkcia na aktualizáciu pozícií vo Firebase
+                } else {
+                    saveTodos();
+                }
             }
         }
 
-        function handleDragEnd() {
-            clearDragStyles();
-            draggedItem = null;
-        }
+        // Nová funkcia na aktualizáciu pozícií vo Firebase po preusporiadaní
+        function updateFirebasePositions() {
+            if (!currentUser) return;
 
-        function clearDragStyles() {
-            document.querySelectorAll('#todo-list li').forEach(item => {
-                item.style.borderTop = '';
-                item.style.borderBottom = '';
-                item.classList.remove('dragging');
+            // Získaj všetky úlohy v aktuálnom poradí
+            const tasks = [];
+            todoListEl.querySelectorAll('li').forEach((li, index) => {
+                if (li.hasAttribute('data-id')) {
+                    tasks.push({
+                        id: li.getAttribute('data-id'),
+                        position: index
+                    });
+                }
+            });
+
+            // Vytvor batch pre hromadné úpravy
+            const batch = db.batch();
+            tasks.forEach(task => {
+                const docRef = db.collection('users').doc(currentUser.uid)
+                               .collection('todos').doc(task.id);
+                batch.update(docRef, { position: task.position });
+            });
+
+            // Vykonaj batch úpravy
+            batch.commit().catch(error => {
+                console.error('Chyba pri aktualizácii poradia:', error);
             });
         }
 
