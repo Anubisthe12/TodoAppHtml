@@ -1,101 +1,230 @@
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jednoduchá TODO aplikácia</title>
+  <title>Todo App with Firebase Google Auth</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { text-align: center; }
-    form { display: flex; margin-bottom: 1rem; }
-    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; }
-    ul { list-style: none; padding: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border: 1px solid #ddd; margin-bottom: 0.5rem; border-radius: 4px; }
-    .done { text-decoration: line-through; color: #888; }
-    .delete-btn { background: none; border: none; color: red; font-weight: bold; cursor: pointer; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #todo-app {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      width: 300px;
+      text-align: center;
+    }
+    #todo-app h1 { margin-bottom: 20px; color: #333; }
+    #todo-input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    #add-todo { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    #add-todo:hover { background-color: #0056b3; }
+    #todo-list { list-style: none; padding: 0; margin-top: 20px; }
+    #todo-list li { background: #f9f9f9; margin-bottom: 10px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; cursor: grab; }
+    .drag-handle { cursor: grab; padding-right: 10px; color: #666; }
+    .dragging { opacity: 0.5; }
+    .delete-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+    .delete-btn:hover { background-color: #a71d2a; }
+    .edit-btn { background-color: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+    .edit-btn:hover { background-color: #0056b3; }
+    .button-group { display: flex; }
+    #auth-controls { margin-bottom: 20px; text-align: center; }
+    #auth-controls button { margin: 0 5px; padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; }
+    #login-btn { background-color: #4285F4; color: white; }
+    #logout-btn { background-color: #DB4437; color: white; display: none; }
   </style>
 </head>
 <body>
-  <h1>Moje úlohy</h1>
-  <form id="todo-form">
-    <input id="todo-input" type="text" placeholder="Nová úloha" required />
-    <button type="submit">Pridať</button>
-  </form>
-  <ul id="todo-list"></ul>
+  <div id="auth-controls">
+    <button id="login-btn">Prihlásiť sa cez Google</button>
+    <button id="logout-btn">Odhlásiť sa</button>
+  </div>
+  <div id="todo-app" style="display:none">
+    <h1>Todo App</h1>
+    <input type="text" id="todo-input" placeholder="Enter a task">
+    <button id="add-todo">Add</button>
+    <ul id="todo-list"></ul>
+  </div>
 
-  <!-- Firebase SDK -->
   <script type="module">
-    // Importy z Firebase v9+ (modulárna verzia)
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import {
-      getFirestore,
-      collection,
-      addDoc,
-      onSnapshot,
-      deleteDoc,
-      doc,
-      updateDoc
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-firestore.js";
 
-    // Konfigurácia Firebase (váš projekt)
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
       authDomain: "todo-97eb7.firebaseapp.com",
       projectId: "todo-97eb7",
       storageBucket: "todo-97eb7.firebasestorage.app",
       messagingSenderId: "532736396477",
-      appId: "1:532736396477:web:c0444e0d91e744c356bbd4"
+      appId: "1:532736396477:web:c0444e0d91e744c356bb4"
     };
-
-    // Inicializácia Firebase a Firestore
+    
+    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
     const db = getFirestore(app);
-    const todosCol = collection(db, 'todos');
 
-    // Referencie na DOM prvky
-    const form = document.getElementById('todo-form');
-    const input = document.getElementById('todo-input');
-    const list = document.getElementById('todo-list');
+    // UI elements
+    const loginBtn  = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const authControls = document.getElementById('auth-controls');
+    const todoApp   = document.getElementById('todo-app');
+    const todoListEl = document.getElementById('todo-list');
+    const todoInput = document.getElementById('todo-input');
+    const addTodoBtn = document.getElementById('add-todo');
+    const TEXT_LIMIT = 15;
 
-    // Pridanie novej úlohy
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const text = input.value.trim();
-      if (!text) return;
-      await addDoc(todosCol, { text, done: false, created: Date.now() });
-      input.value = '';
+    // Event: Login
+    loginBtn.addEventListener('click', () => {
+      signInWithPopup(auth, provider).catch(console.error);
     });
 
-    // Dynamické načítanie úloh a aktualizácia UI
-    onSnapshot(todosCol, (snapshot) => {
-      list.innerHTML = '';
-      snapshot.docs.forEach(docSnap => {
-        const data = docSnap.data();
-        const li = document.createElement('li');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = data.done;
-        const span = document.createElement('span');
-        span.textContent = data.text;
-        if (data.done) span.classList.add('done');
+    // Event: Logout
+    logoutBtn.addEventListener('click', () => {
+      signOut(auth).catch(console.error);
+    });
 
-        // Prekreslenie stavu po kliknutí
-        checkbox.addEventListener('change', async () => {
-          await updateDoc(doc(db, 'todos', docSnap.id), { done: checkbox.checked });
-        });
+    // Auth state listener
+    onAuthStateChanged(auth, async user => {
+      if (user) {
+        authControls.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        todoApp.style.display = 'block';
+        clearTodosFromDOM();
+        await loadTodosFromFirestore(user.uid);
+      } else {
+        authControls.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        todoApp.style.display = 'none';
+        clearTodosFromDOM();
+      }
+    });
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = '✕';
-        deleteBtn.classList.add('delete-btn');
-        deleteBtn.addEventListener('click', async () => {
-          await deleteDoc(doc(db, 'todos', docSnap.id));
-        });
+    // Add todo button
+    addTodoBtn.addEventListener('click', async () => {
+      const task = todoInput.value.trim();
+      if (!task) return;
+      addTodoToDOM(task);
+      await saveTodos();
+      todoInput.value = '';
+    });
 
-        li.append(checkbox, span, deleteBtn);
-        list.appendChild(li);
+    // Create and append a todo item in DOM
+    function addTodoToDOM(task) {
+      const li = document.createElement('li');
+      li.draggable = true;
+      const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
+      li.innerHTML = `
+        <div class="drag-handle">☰</div>
+        <span data-full-text="${task}">${displayTask}</span>
+        <div class="button-group">
+          <button class="edit-btn">Edit</button>
+          <button class="delete-btn">Delete</button>
+        </div>`;
+      todoListEl.appendChild(li);
+
+      li.addEventListener('dragstart', handleDragStart);
+      li.addEventListener('dragover', handleDragOver);
+      li.addEventListener('drop', handleDrop);
+      li.addEventListener('dragend', handleDragEnd);
+
+      li.querySelector('.edit-btn').addEventListener('click', async () => {
+        const spanEl = li.querySelector('span');
+        const current = spanEl.getAttribute('data-full-text');
+        const newTask = prompt('Edit task', current);
+        if (newTask && newTask.trim()) {
+          const trimmed = newTask.trim();
+          spanEl.textContent = trimmed.length > TEXT_LIMIT ? trimmed.substring(0, TEXT_LIMIT) + '...' : trimmed;
+          spanEl.setAttribute('data-full-text', trimmed);
+          await saveTodos();
+        }
       });
-    });
+
+      li.querySelector('.delete-btn').addEventListener('click', async () => {
+        li.remove();
+        await saveTodos();
+      });
+    }
+
+    // Drag & drop handlers
+    let draggedItem = null;
+    function handleDragStart(e) {
+      draggedItem = this;
+      e.dataTransfer.setData('text/html', this.innerHTML);
+      this.classList.add('dragging');
+    }
+    function handleDragOver(e) {
+      e.preventDefault();
+      const target = e.target.closest('li');
+      if (target && target !== draggedItem) {
+        const rect = target.getBoundingClientRect();
+        const offset = rect.y + rect.height/2;
+        if (e.clientY - offset > 0) {
+          target.style.borderBottom = 'solid 2px #007bff'; target.style.borderTop = '';
+        } else {
+          target.style.borderTop = 'solid 2px #007bff'; target.style.borderBottom = '';
+        }
+      }
+    }
+    function handleDrop(e) {
+      e.preventDefault();
+      const target = e.target.closest('li');
+      if (target && target !== draggedItem) {
+        const insertAfter = e.clientY > target.getBoundingClientRect().top + target.offsetHeight/2;
+        target.parentNode.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
+        clearDragStyles();
+        saveTodos();
+      }
+    }
+    function handleDragEnd() {
+      clearDragStyles();
+      draggedItem = null;
+    }
+    function clearDragStyles() {
+      document.querySelectorAll('#todo-list li').forEach(i => { i.style.borderTop = ''; i.style.borderBottom = ''; i.classList.remove('dragging'); });
+    }
+
+    // Clear all todos in DOM
+    function clearTodosFromDOM() {
+      todoListEl.innerHTML = '';
+    }
+
+    // Load todos from Firestore
+    async function loadTodosFromFirestore(uid) {
+      const q = collection(db, 'users', uid, 'todos');
+      const snapshot = await getDocs(q);
+      snapshot.forEach(docSnap => addTodoToDOM(docSnap.data().text));
+    }
+
+    // Save current todos to Firestore
+    async function saveTodos() {
+      const user = auth.currentUser;
+      if (!user) return;
+      const uid = user.uid;
+      const colRef = collection(db, 'users', uid, 'todos');
+      // delete existing
+      const olds = await getDocs(colRef);
+      for (const d of olds.docs) {
+        await deleteDoc(doc(db, 'users', uid, 'todos', d.id));
+      }
+      // add current
+      const texts = Array.from(todoListEl.querySelectorAll('li span')).map(s => s.getAttribute('data-full-text'));
+      for (const text of texts) {
+        await addDoc(colRef, { text, created: Date.now() });
+      }
+    }
+
   </script>
 </body>
 </html>
