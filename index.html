@@ -1,263 +1,150 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Todo App with Firebase Google Auth (Compat)</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo App with Firebase Google Auth (Compat)</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    #todo-app { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
+    #todo-app h1 { margin-bottom: 20px; color: #333; }
+    #todo-input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    #add-todo { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    #add-todo:hover { background-color: #0056b3; }
+    #todo-list { list-style: none; padding: 0; margin-top: 20px; }
+    #todo-list li { background: #f9f9f9; margin-bottom: 10px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; cursor: grab; }
+    .drag-handle { cursor: grab; padding-right: 10px; color: #666; }
+    .dragging { opacity: 0.5; }
+    .delete-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+    .delete-btn:hover { background-color: #a71d2a; }
+    .edit-btn { background-color: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+    .edit-btn:hover { background-color: #0056b3; }
+    .button-group { display: flex; }
+    #auth-controls { margin-bottom: 20px; text-align: center; }
+    #auth-controls button { margin: 0 5px; padding: 10px 15px; border-radius: 4px; border: none; cursor: pointer; }
+    #login-btn { background-color: #4285F4; color: white; }
+    #logout-btn { background-color: #DB4437; color: white; display: none; }
+  </style>
 
-        #todo-app {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 300px;
-            text-align: center;
-        }
-
-        #todo-app h1 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-
-        #todo-input {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        #add-todo {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        #add-todo:hover {
-            background-color: #0056b3;
-        }
-
-        #todo-list {
-            list-style: none;
-            padding: 0;
-            margin-top: 20px;
-        }
-
-        #todo-list li {
-            background: #f9f9f9;
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid #ddd;
-            cursor: grab;
-        }
-
-        .drag-handle {
-            cursor: grab;
-            padding-right: 10px;
-            color: #666;
-        }
-
-        .dragging {
-            opacity: 0.5;
-        }
-
-        .delete-btn {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .delete-btn:hover {
-            background-color: #a71d2a;
-        }
-
-        .edit-btn {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 5px;
-        }
-
-        .edit-btn:hover {
-            background-color: #0056b3;
-        }
-
-        .button-group {
-            display: flex;
-        }
-
-        #auth-controls {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        #auth-controls button {
-            margin: 0 5px;
-            padding: 10px 15px;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-        }
-
-        #login-btn {
-            background-color: #4285F4;
-            color: white;
-            width: calc(100% - 22px);
-        }
-
-        #logout-btn {
-            background-color: #DB4437;
-            color: white;
-            display: none;
-        }
-    </style>
-
-    <!-- Firebase Compat SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-    <!-- Firebase Hosting auto-init (hides config) -->
-    <script src="/__/firebase/init.js"></script>
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <!-- Firebase Hosting auto-init (hides config) -->
+  <script src="/__/firebase/init.js"></script>
 </head>
-
 <body>
-    <div id="auth-controls">
-        <button id="login-btn">Prihlásiť sa cez Google</button>
-        <button id="logout-btn">Odhlásiť sa</button>
-    </div>
-    <div id="todo-app" style="display:none">
-        <h1>Todo App</h1>
-        <input type="text" id="todo-input" placeholder="Enter a task">
-        <button id="add-todo">Add</button>
-        <ul id="todo-list"></ul>
-    </div>
+  <div id="auth-controls">
+    <button id="login-btn">Prihlásiť sa cez Google</button>
+    <button id="logout-btn">Odhlásiť sa</button>
+  </div>
+  <div id="todo-app" style="display:none">
+    <h1>Todo App</h1>
+    <input type="text" id="todo-input" placeholder="Enter a task">
+    <button id="add-todo">Add</button>
+    <ul id="todo-list"></ul>
+  </div>
 
-    <script>
-        // Firebase is auto-initialized by /__/firebase/init.js
-        const auth = firebase.auth();
-        const provider = new firebase.auth.GoogleAuthProvider();
-        const db = firebase.firestore();
+  <script>
+    // Firebase is auto-initialized by /__/firebase/init.js
+    const auth = firebase.auth();
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const db = firebase.firestore();
 
-        // UI elements
-        const loginBtn = document.getElementById('login-btn');
-        const logoutBtn = document.getElementById('logout-btn');
-        const authControls = document.getElementById('auth-controls');
-        const todoApp = document.getElementById('todo-app');
-        const todoListEl = document.getElementById('todo-list');
-        const todoInput = document.getElementById('todo-input');
-        const addTodoBtn = document.getElementById('add-todo');
-        const TEXT_LIMIT = 15;
+    // UI elements
+    const loginBtn     = document.getElementById('login-btn');
+    const logoutBtn    = document.getElementById('logout-btn');
+    const authControls = document.getElementById('auth-controls');
+    const todoApp      = document.getElementById('todo-app');
+    const todoListEl   = document.getElementById('todo-list');
+    const todoInput    = document.getElementById('todo-input');
+    const addTodoBtn   = document.getElementById('add-todo');
+    const TEXT_LIMIT   = 15;
 
-        // Login
-        loginBtn.addEventListener('click', () => { auth.signInWithPopup(provider).catch(console.error); });
-        // Logout
-        logoutBtn.addEventListener('click', () => { auth.signOut().catch(console.error); });
+    // Login
+    loginBtn.addEventListener('click', () => { auth.signInWithPopup(provider).catch(console.error); });
+    // Logout
+    logoutBtn.addEventListener('click', () => { auth.signOut().catch(console.error); });
 
-        // Auth state
-        auth.onAuthStateChanged(async user => {
-            if (user) {
-                authControls.style.display = 'none';
-                logoutBtn.style.display = 'inline-block';
-                todoApp.style.display = 'block';
-                clearTodosFromDOM();
-                await loadTodosFromFirestore(user.uid);
-            } else {
-                authControls.style.display = 'block';
-                logoutBtn.style.display = 'none';
-                todoApp.style.display = 'none';
-                clearTodosFromDOM();
-            }
-        });
+    // Auth state
+    auth.onAuthStateChanged(async user => {
+      if (user) {
+        authControls.style.display = 'none';
+        logoutBtn.style.display   = 'inline-block';
+        todoApp.style.display      = 'block';
+        clearTodosFromDOM();
+        await loadTodosFromFirestore(user.uid);
+      } else {
+        authControls.style.display = 'block';
+        logoutBtn.style.display   = 'none';
+        todoApp.style.display      = 'none';
+        clearTodosFromDOM();
+      }
+    });
 
-        // Add todo
-        addTodoBtn.addEventListener('click', async () => {
-            const task = todoInput.value.trim(); if (!task) return;
-            addTodoToDOM(task);
-            await saveTodos();
-            todoInput.value = '';
-        });
+    // Add todo
+    addTodoBtn.addEventListener('click', async () => {
+      const task = todoInput.value.trim(); if (!task) return;
+      addTodoToDOM(task);
+      await saveTodos();
+      todoInput.value = '';
+    });
 
-        // DOM todo
-        function addTodoToDOM(task) {
-            const li = document.createElement('li'); li.draggable = true;
-            const display = (task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task);
-            li.innerHTML = `
+    // DOM todo
+    function addTodoToDOM(task) {
+      const li = document.createElement('li'); li.draggable = true;
+      const display = (task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task);
+      li.innerHTML = `
         <div class="drag-handle">☰</div>
         <span data-full-text="${task}">${display}</span>
         <div class="button-group">
           <button class="edit-btn">Edit</button>
           <button class="delete-btn">Delete</button>
         </div>`;
-            todoListEl.appendChild(li);
-            // handlers
-            li.addEventListener('dragstart', handleDragStart);
-            li.addEventListener('dragover', handleDragOver);
-            li.addEventListener('drop', handleDrop);
-            li.addEventListener('dragend', handleDragEnd);
-            li.querySelector('.edit-btn').addEventListener('click', async () => {
-                const span = li.querySelector('span');
-                const curr = span.getAttribute('data-full-text');
-                const newT = prompt('Edit task', curr);
-                if (newT && newT.trim()) {
-                    const t = newT.trim();
-                    span.textContent = (t.length > TEXT_LIMIT ? t.substring(0, TEXT_LIMIT) + '...' : t);
-                    span.setAttribute('data-full-text', t);
-                    await saveTodos();
-                }
-            });
-            li.querySelector('.delete-btn').addEventListener('click', async () => { li.remove(); await saveTodos(); });
+      todoListEl.appendChild(li);
+      // handlers
+      li.addEventListener('dragstart', handleDragStart);
+      li.addEventListener('dragover', handleDragOver);
+      li.addEventListener('drop', handleDrop);
+      li.addEventListener('dragend', handleDragEnd);
+      li.querySelector('.edit-btn').addEventListener('click', async () => {
+        const span = li.querySelector('span');
+        const curr = span.getAttribute('data-full-text');
+        const newT = prompt('Edit task', curr);
+        if (newT && newT.trim()) {
+          const t = newT.trim();
+          span.textContent = (t.length > TEXT_LIMIT ? t.substring(0, TEXT_LIMIT)+'...' : t);
+          span.setAttribute('data-full-text', t);
+          await saveTodos();
         }
+      });
+      li.querySelector('.delete-btn').addEventListener('click', async () => { li.remove(); await saveTodos(); });
+    }
 
-        // Drag & drop
-        let draggedItem = null;
-        function handleDragStart(e) { draggedItem = this; e.dataTransfer.setData('text/html', this.innerHTML); this.classList.add('dragging'); }
-        function handleDragOver(e) { e.preventDefault(); const target = e.target.closest('li'); if (target && target !== draggedItem) { const r = target.getBoundingClientRect(); const offset = r.y + r.height / 2; if (e.clientY - offset > 0) { target.style.borderBottom = 'solid 2px #007bff'; target.style.borderTop = ''; } else { target.style.borderTop = 'solid 2px #007bff'; target.style.borderBottom = ''; } } }
-        function handleDrop(e) { e.preventDefault(); const target = e.target.closest('li'); if (target && target !== draggedItem) { const after = e.clientY > target.getBoundingClientRect().top + target.offsetHeight / 2; target.parentNode.insertBefore(draggedItem, after ? target.nextSibling : target); clearDragStyles(); saveTodos(); } }
-        function handleDragEnd() { clearDragStyles(); draggedItem = null; }
-        function clearDragStyles() { document.querySelectorAll('#todo-list li').forEach(i => { i.style.borderTop = ''; i.style.borderBottom = ''; i.classList.remove('dragging'); }); }
+    // Drag & drop
+    let draggedItem = null;
+    function handleDragStart(e) { draggedItem = this; e.dataTransfer.setData('text/html', this.innerHTML); this.classList.add('dragging'); }
+    function handleDragOver(e) { e.preventDefault(); const target = e.target.closest('li'); if (target && target !== draggedItem) { const r = target.getBoundingClientRect(); const offset = r.y + r.height/2; if (e.clientY - offset > 0) { target.style.borderBottom='solid 2px #007bff'; target.style.borderTop=''; } else { target.style.borderTop='solid 2px #007bff'; target.style.borderBottom=''; } } }
+    function handleDrop(e) { e.preventDefault(); const target = e.target.closest('li'); if (target && target !== draggedItem) { const after = e.clientY > target.getBoundingClientRect().top + target.offsetHeight/2; target.parentNode.insertBefore(draggedItem, after ? target.nextSibling : target); clearDragStyles(); saveTodos(); } }
+    function handleDragEnd() { clearDragStyles(); draggedItem = null; }
+    function clearDragStyles() { document.querySelectorAll('#todo-list li').forEach(i=>{ i.style.borderTop=''; i.style.borderBottom=''; i.classList.remove('dragging'); }); }
 
-        // Clear DOM
-        function clearTodosFromDOM() { todoListEl.innerHTML = ''; }
+    // Clear DOM
+    function clearTodosFromDOM() { todoListEl.innerHTML = ''; }
 
-        // Firestore load
-        async function loadTodosFromFirestore(uid) {
-            const snapshot = await db.collection('users').doc(uid).collection('todos').get();
-            snapshot.forEach(doc => addTodoToDOM(doc.data().text));
-        }
+    // Firestore load
+    async function loadTodosFromFirestore(uid) {
+      const snapshot = await db.collection('users').doc(uid).collection('todos').get();
+      snapshot.forEach(doc => addTodoToDOM(doc.data().text));
+    }
 
-        // Firestore save
-        async function saveTodos() {
-            const user = auth.currentUser; if (!user) return;
-            const todosRef = db.collection('users').doc(user.uid).collection('todos');
-            const snapshot = await todosRef.get(); snapshot.forEach(doc => todosRef.doc(doc.id).delete());
-            const texts = Array.from(todoListEl.querySelectorAll('li span')).map(s => s.getAttribute('data-full-text')); for (const t of texts) { await todosRef.add({ text: t, created: Date.now() }); }
-        }
-    </script>
+    // Firestore save
+    async function saveTodos() {
+      const user = auth.currentUser; if (!user) return;
+      const todosRef = db.collection('users').doc(user.uid).collection('todos');
+      const snapshot = await todosRef.get(); snapshot.forEach(doc => todosRef.doc(doc.id).delete());
+      const texts = Array.from(todoListEl.querySelectorAll('li span')).map(s=>s.getAttribute('data-full-text')); for (const t of texts) { await todosRef.add({ text: t, created: Date.now() }); }
+    }
+  </script>
 </body>
-
 </html>
