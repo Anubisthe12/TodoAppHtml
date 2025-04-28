@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World</title>
+</head>
+
+<script>
+    window.addEventListener('DOMContentLoaded', function () {
+        // Global variable for text length limit
+        const TEXT_LIMIT = 15;
+
+        // Override the duplicate function to ensure the edit button is included
+        function correctAddTodoToDOM(task) {
+            const li = document.createElement('li');
+            li.draggable = true;
+
+            // Limit task text using the global TEXT_LIMIT
+            const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
+
+            li.innerHTML = `
+                <div class="drag-handle">☰</div>
+                <span data-full-text="${task}">${displayTask}</span>
+                <div class="button-group">
+                    <button class="edit-btn">Edit</button>
+                    <button class="delete-btn">Delete</button>
+                </div>`;
+            document.getElementById('todo-list').appendChild(li);
+
+            // Add drag event listeners
+            li.addEventListener('dragstart', handleDragStart);
+            li.addEventListener('dragover', handleDragOver);
+            li.addEventListener('drop', handleDrop);
+            li.addEventListener('dragend', handleDragEnd);
+
+            li.querySelector('.edit-btn').addEventListener('click', function () {
+                const spanEl = li.querySelector('span');
+                const currentTask = spanEl.getAttribute('data-full-text');
+                const newTask = prompt('Edit task', currentTask);
+                if (newTask && newTask.trim()) {
+                    const newDisplayTask = newTask.trim().length > TEXT_LIMIT ?
+                        newTask.trim().substring(0, TEXT_LIMIT) + '...' :
+                        newTask.trim();
+                    spanEl.textContent = newDisplayTask;
+                    spanEl.setAttribute('data-full-text', newTask.trim());
+                    saveTodos();
+                }
+            });
+            li.querySelector('.delete-btn').addEventListener('click', function () {
+                li.remove();
+                saveTodos();
+            });
+        }
+        window.addTodoToDOM = correctAddTodoToDOM;
+    });
+</script>
+
+<body>
+
+    <div id="todo-app">
+        <h1>Todo App</h1>
+        <input type="text" id="todo-input" placeholder="Enter a task">
+        <button id="add-todo">Add</button>
+        <ul id="todo-list"></ul>
+    </div>
+    <script>
+        // Global variable for text length limit
+        const TEXT_LIMIT = 15;
+
+        const todoListEl = document.getElementById('todo-list');
+        const todoInput = document.getElementById('todo-input');
+        const addTodoBtn = document.getElementById('add-todo');
+
+        // Add a new task to the DOM
+        function addTodoToDOM(task) {
+            const li = document.createElement('li');
+            li.draggable = true;
+
+            // Limit task text using the global TEXT_LIMIT
+            const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
+
+            li.innerHTML = `
+                <div class="drag-handle">☰</div>
+                <span data-full-text="${task}">${displayTask}</span>
+                <div class="button-group">
+                    <button class="edit-btn">Edit</button>
+                    <button class="delete-btn">Delete</button>
+                </div>
+            `;
+            todoListEl.appendChild(li);
+
+            // Add drag event listeners
+            li.addEventListener('dragstart', handleDragStart);
+            li.addEventListener('dragover', handleDragOver);
+            li.addEventListener('drop', handleDrop);
+            li.addEventListener('dragend', handleDragEnd);
+
+            // Edit button handler
+            li.querySelector('.edit-btn').addEventListener('click', function () {
+                const spanEl = li.querySelector('span');
+                const currentTask = spanEl.getAttribute('data-full-text');
+                const newTask = prompt('Edit task', currentTask);
+                if (newTask && newTask.trim()) {
+                    const newDisplayTask = newTask.trim().length > TEXT_LIMIT ?
+                        newTask.trim().substring(0, TEXT_LIMIT) + '...' :
+                        newTask.trim();
+                    spanEl.textContent = newDisplayTask;
+                    spanEl.setAttribute('data-full-text', newTask.trim());
+                    saveTodos();
+                }
+            });
+
+            // Delete button handler
+            li.querySelector('.delete-btn').addEventListener('click', function () {
+                li.remove();
+                saveTodos();
+            });
+        }
+
+        // Drag and drop functionality
+        let draggedItem = null;
+
+        function handleDragStart(e) {
+            draggedItem = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const target = e.target.closest('li');
+            if (target && target !== draggedItem) {
+                const boundingRect = target.getBoundingClientRect();
+                const offset = boundingRect.y + (boundingRect.height / 2);
+                if (e.clientY - offset > 0) {
+                    target.style.borderBottom = 'solid 2px #007bff';
+                    target.style.borderTop = '';
+                } else {
+                    target.style.borderTop = 'solid 2px #007bff';
+                    target.style.borderBottom = '';
+                }
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const target = e.target.closest('li');
+            if (target && target !== draggedItem) {
+                if (e.clientY > target.getBoundingClientRect().top + (target.offsetHeight / 2)) {
+                    target.parentNode.insertBefore(draggedItem, target.nextSibling);
+                } else {
+                    target.parentNode.insertBefore(draggedItem, target);
+                }
+                clearDragStyles();
+                saveTodos();
+            }
+        }
+
+        function handleDragEnd() {
+            clearDragStyles();
+            draggedItem = null;
+        }
+
+        function clearDragStyles() {
+            document.querySelectorAll('#todo-list li').forEach(item => {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+                item.classList.remove('dragging');
+            });
+        }
+
+        // Load tasks from localStorage on startup
+        function loadTodos() {
+            const todosStr = localStorage.getItem('todos');
+            if (todosStr) {
+                const todos = JSON.parse(todosStr);
+                todos.forEach(task => {
+                    addTodoToDOM(task);
+                });
+            }
+        }
+
+        // Save the current list of tasks to localStorage
+        function saveTodos() {
+            const todosArray = [];
+            todoListEl.querySelectorAll('li span').forEach(span => {
+                todosArray.push(span.getAttribute('data-full-text'));
+            });
+            localStorage.setItem('todos', JSON.stringify(todosArray));
+        }
+
+        addTodoBtn.addEventListener('click', function () {
+            const task = todoInput.value.trim();
+            if (task) {
+                addTodoToDOM(task);
+                saveTodos();
+                todoInput.value = '';
+            }
+        });
+
+        // Load the todos when the page loads
+        loadTodos();
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #todo-app {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+
+        #todo-app h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #todo-input {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #add-todo {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #add-todo:hover {
+            background-color: #0056b3;
+        }
+
+        #todo-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+        }
+
+        #todo-list li {
+            background: #f9f9f9;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #ddd;
+            cursor: grab;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            padding-right: 10px;
+            color: #666;
+        }
+
+        .dragging {
+            opacity: 0.5;
+        }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            background-color: #a71d2a;
+        }
+
+        .edit-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .edit-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .button-group {
+            display: flex;
+        }
+    </style>
+</body>
+
+</html>
