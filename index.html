@@ -3,26 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Todo App with Firebase Google Auth</title>
+  <title>Todo App with Firebase Google Auth (Compat)</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f9;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    #todo-app {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      width: 300px;
-      text-align: center;
-    }
+    body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    #todo-app { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
     #todo-app h1 { margin-bottom: 20px; color: #333; }
     #todo-input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
     #add-todo { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
@@ -41,6 +25,10 @@
     #login-btn { background-color: #4285F4; color: white; }
     #logout-btn { background-color: #DB4437; color: white; display: none; }
   </style>
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div id="auth-controls">
@@ -54,12 +42,8 @@
     <ul id="todo-list"></ul>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.4.1/firebase-firestore.js";
-
-    // Firebase config
+  <script>
+    // Firebase init (compat)
     const firebaseConfig = {
       apiKey: "AIzaSyA4hegU59fgiVEC7weSAWDIJ7TcNPPzHww",
       authDomain: "todo-97eb7.firebaseapp.com",
@@ -68,163 +52,125 @@
       messagingSenderId: "532736396477",
       appId: "1:532736396477:web:c0444e0d91e744c356bb4"
     };
-    
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
-    const db = getFirestore(app);
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const db = firebase.firestore();
 
     // UI elements
-    const loginBtn  = document.getElementById('login-btn');
-    const logoutBtn = document.getElementById('logout-btn');
+    const loginBtn     = document.getElementById('login-btn');
+    const logoutBtn    = document.getElementById('logout-btn');
     const authControls = document.getElementById('auth-controls');
-    const todoApp   = document.getElementById('todo-app');
-    const todoListEl = document.getElementById('todo-list');
-    const todoInput = document.getElementById('todo-input');
-    const addTodoBtn = document.getElementById('add-todo');
-    const TEXT_LIMIT = 15;
+    const todoApp      = document.getElementById('todo-app');
+    const todoListEl   = document.getElementById('todo-list');
+    const todoInput    = document.getElementById('todo-input');
+    const addTodoBtn   = document.getElementById('add-todo');
+    const TEXT_LIMIT   = 15;
 
-    // Event: Login
+    // Login
     loginBtn.addEventListener('click', () => {
-      signInWithPopup(auth, provider).catch(console.error);
+      auth.signInWithPopup(provider).catch(console.error);
     });
-
-    // Event: Logout
+    // Logout
     logoutBtn.addEventListener('click', () => {
-      signOut(auth).catch(console.error);
+      auth.signOut().catch(console.error);
     });
 
-    // Auth state listener
-    onAuthStateChanged(auth, async user => {
+    // Auth state
+    auth.onAuthStateChanged(async user => {
       if (user) {
         authControls.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
-        todoApp.style.display = 'block';
+        logoutBtn.style.display   = 'inline-block';
+        todoApp.style.display      = 'block';
         clearTodosFromDOM();
         await loadTodosFromFirestore(user.uid);
       } else {
         authControls.style.display = 'block';
-        logoutBtn.style.display = 'none';
-        todoApp.style.display = 'none';
+        logoutBtn.style.display   = 'none';
+        todoApp.style.display      = 'none';
         clearTodosFromDOM();
       }
     });
 
-    // Add todo button
+    // Add todo
     addTodoBtn.addEventListener('click', async () => {
-      const task = todoInput.value.trim();
-      if (!task) return;
+      const task = todoInput.value.trim(); if (!task) return;
       addTodoToDOM(task);
       await saveTodos();
       todoInput.value = '';
     });
 
-    // Create and append a todo item in DOM
+    // DOM todo
     function addTodoToDOM(task) {
-      const li = document.createElement('li');
-      li.draggable = true;
-      const displayTask = task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task;
+      const li = document.createElement('li'); li.draggable = true;
+      const display = (task.length > TEXT_LIMIT ? task.substring(0, TEXT_LIMIT) + '...' : task);
       li.innerHTML = `
         <div class="drag-handle">☰</div>
-        <span data-full-text="${task}">${displayTask}</span>
+        <span data-full-text="${task}">${display}</span>
         <div class="button-group">
           <button class="edit-btn">Edit</button>
           <button class="delete-btn">Delete</button>
         </div>`;
       todoListEl.appendChild(li);
-
+      // handlers
       li.addEventListener('dragstart', handleDragStart);
       li.addEventListener('dragover', handleDragOver);
       li.addEventListener('drop', handleDrop);
       li.addEventListener('dragend', handleDragEnd);
-
       li.querySelector('.edit-btn').addEventListener('click', async () => {
-        const spanEl = li.querySelector('span');
-        const current = spanEl.getAttribute('data-full-text');
-        const newTask = prompt('Edit task', current);
-        if (newTask && newTask.trim()) {
-          const trimmed = newTask.trim();
-          spanEl.textContent = trimmed.length > TEXT_LIMIT ? trimmed.substring(0, TEXT_LIMIT) + '...' : trimmed;
-          spanEl.setAttribute('data-full-text', trimmed);
+        const span = li.querySelector('span');
+        const curr = span.getAttribute('data-full-text');
+        const newT = prompt('Edit task', curr);
+        if (newT && newT.trim()) {
+          const t = newT.trim();
+          span.textContent = (t.length > TEXT_LIMIT ? t.substring(0, TEXT_LIMIT)+'...' : t);
+          span.setAttribute('data-full-text', t);
           await saveTodos();
         }
       });
-
-      li.querySelector('.delete-btn').addEventListener('click', async () => {
-        li.remove();
-        await saveTodos();
-      });
+      li.querySelector('.delete-btn').addEventListener('click', async () => { li.remove(); await saveTodos(); });
     }
 
-    // Drag & drop handlers
+    // Drag & drop
     let draggedItem = null;
-    function handleDragStart(e) {
-      draggedItem = this;
-      e.dataTransfer.setData('text/html', this.innerHTML);
-      this.classList.add('dragging');
-    }
+    function handleDragStart(e) { draggedItem = this; e.dataTransfer.setData('text/html', this.innerHTML); this.classList.add('dragging'); }
     function handleDragOver(e) {
       e.preventDefault();
-      const target = e.target.closest('li');
-      if (target && target !== draggedItem) {
-        const rect = target.getBoundingClientRect();
-        const offset = rect.y + rect.height/2;
-        if (e.clientY - offset > 0) {
-          target.style.borderBottom = 'solid 2px #007bff'; target.style.borderTop = '';
-        } else {
-          target.style.borderTop = 'solid 2px #007bff'; target.style.borderBottom = '';
-        }
+      const target = e.target.closest('li'); if (target && target !== draggedItem) {
+        const r = target.getBoundingClientRect(); const offset = r.y + r.height/2;
+        if (e.clientY - offset > 0) { target.style.borderBottom='solid 2px #007bff'; target.style.borderTop=''; }
+        else { target.style.borderTop='solid 2px #007bff'; target.style.borderBottom=''; }
       }
     }
     function handleDrop(e) {
-      e.preventDefault();
-      const target = e.target.closest('li');
+      e.preventDefault(); const target = e.target.closest('li');
       if (target && target !== draggedItem) {
-        const insertAfter = e.clientY > target.getBoundingClientRect().top + target.offsetHeight/2;
-        target.parentNode.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
-        clearDragStyles();
-        saveTodos();
+        const after = e.clientY > target.getBoundingClientRect().top + target.offsetHeight/2;
+        target.parentNode.insertBefore(draggedItem, after ? target.nextSibling : target);
+        clearDragStyles(); saveTodos();
       }
     }
-    function handleDragEnd() {
-      clearDragStyles();
-      draggedItem = null;
-    }
-    function clearDragStyles() {
-      document.querySelectorAll('#todo-list li').forEach(i => { i.style.borderTop = ''; i.style.borderBottom = ''; i.classList.remove('dragging'); });
-    }
+    function handleDragEnd() { clearDragStyles(); draggedItem = null; }
+    function clearDragStyles() { document.querySelectorAll('#todo-list li').forEach(i=>{ i.style.borderTop=''; i.style.borderBottom=''; i.classList.remove('dragging'); }); }
 
-    // Clear all todos in DOM
-    function clearTodosFromDOM() {
-      todoListEl.innerHTML = '';
-    }
+    // Clear DOM
+    function clearTodosFromDOM() { todoListEl.innerHTML = ''; }
 
-    // Load todos from Firestore
+    // Firestore load
     async function loadTodosFromFirestore(uid) {
-      const q = collection(db, 'users', uid, 'todos');
-      const snapshot = await getDocs(q);
-      snapshot.forEach(docSnap => addTodoToDOM(docSnap.data().text));
+      const snapshot = await db.collection('users').doc(uid).collection('todos').get();
+      snapshot.forEach(doc => addTodoToDOM(doc.data().text));
     }
 
-    // Save current todos to Firestore
+    // Firestore save
     async function saveTodos() {
-      const user = auth.currentUser;
-      if (!user) return;
-      const uid = user.uid;
-      const colRef = collection(db, 'users', uid, 'todos');
-      // delete existing
-      const olds = await getDocs(colRef);
-      for (const d of olds.docs) {
-        await deleteDoc(doc(db, 'users', uid, 'todos', d.id));
-      }
-      // add current
-      const texts = Array.from(todoListEl.querySelectorAll('li span')).map(s => s.getAttribute('data-full-text'));
-      for (const text of texts) {
-        await addDoc(colRef, { text, created: Date.now() });
-      }
+      const user = auth.currentUser; if (!user) return;
+      const todosRef = db.collection('users').doc(user.uid).collection('todos');
+      const snapshot = await todosRef.get();
+      snapshot.forEach(doc => todosRef.doc(doc.id).delete());
+      const texts = Array.from(todoListEl.querySelectorAll('li span')).map(s=>s.getAttribute('data-full-text'));
+      for (const t of texts) { await todosRef.add({ text: t, created: Date.now() }); }
     }
-
   </script>
 </body>
 </html>
